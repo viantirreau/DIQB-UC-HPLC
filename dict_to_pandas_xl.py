@@ -29,13 +29,12 @@ def dict_to_xlsx(arch):
     txt = read_pdf(arch)
     samples, stds = split_samples_std(txt)
     if txt:
-        nombres = all_std_intersection(txt)
+        names = all_std_intersection(txt)
         workbook = xlsxwriter.Workbook(f'Resultados {filename}.xlsx')
-        for nombre_muestra in nombres:
-            conc_negativas = False
-            worksheet = workbook.add_worksheet(nombre_muestra)
+        for sample_name in names:
+            worksheet = workbook.add_worksheet(sample_name)
 
-            # Estilos
+            # Styles
             exp = workbook.add_format()
             exp.set_font_script(1)
             center = workbook.add_format()
@@ -43,43 +42,43 @@ def dict_to_xlsx(arch):
             center.set_align("vcenter")
             right = workbook.add_format()
             right.set_align("right")
-            decimales3 = workbook.add_format()
-            decimales3.set_num_format("0.000")
+            decimals3 = workbook.add_format()
+            decimals3.set_num_format("0.000")
 
-            # Escribir calibración
+            # Write calibration
             worksheet.merge_range('A1:B1', "Curva de calibrado",
                                   cell_format=center)
             worksheet.write('A2', "mg/L", center)
             worksheet.write('B2', "Área", center)
-            f = 0
-            for fila, conc in enumerate(stds, 2):
-                worksheet.write(fila, 0, conc)  # Concentración
-                worksheet.write(fila, 1, stds[conc][nombre_muestra])  # Área
-                f = fila
+            r = 0
+            for row, conc in enumerate(stds, 2):
+                worksheet.write(row, 0, conc)  # Concentration
+                worksheet.write(row, 1, stds[conc][sample_name])  # Area
+                r = row
 
             # Ver si no hay concentraciones negativas
-            x_vals, y_vals = list(stds.keys()), [std[nombre_muestra] for std in
+            x_vals, y_vals = list(stds.keys()), [std[sample_name] for std in
                                                  stds.values()]
-            sample_vals = [sampl[nombre_muestra] for sampl in samples.values()]
+            sample_vals = [sampl[sample_name] for sampl in samples.values()]
             with_intercept = linear_fit(x_vals, y_vals)
 
-            worksheet.write(f + 2, 0, "m", center)
-            worksheet.write(f + 2, 1, "n", center)
-            pos_m = (f + 3, 0)
-            pos_n = (f + 3, 1)
+            worksheet.write(r + 2, 0, "m", center)
+            worksheet.write(r + 2, 1, "n", center)
+            pos_m = (r + 3, 0)
+            pos_n = (r + 3, 1)
             scatter = workbook.add_chart(
                 {"type": "scatter"})
             scatter.set_title(
-                {"name": f"Curva de calibrado {nombre_muestra}"})
+                {"name": f"Curva de calibrado {sample_name}"})
             if any_negative_concentration(with_intercept, sample_vals):
                 worksheet.write_array_formula(
-                    f + 3, 0, f + 3, 1,
-                    f"=LINEST(B3:B{f+1}, A3:A{f+1}, false, false)"
+                    r + 3, 0, r + 3, 1,
+                    f"=LINEST(B3:B{r+1}, A3:A{r+1}, false, false)"
                 )
 
                 scatter.add_series({
-                    'categories': f"'{nombre_muestra}'!$A$3:$A${f+1}",
-                    'values': f"'{nombre_muestra}'!$B$3:$B${f+1}",
+                    'categories': f"'{sample_name}'!$A$3:$A${r+1}",
+                    'values': f"'{sample_name}'!$B$3:$B${r+1}",
                     'trendline': {
                         'type': 'linear',
                         'intercept': 0,
@@ -88,16 +87,16 @@ def dict_to_xlsx(arch):
                     },
                 })
             else:
-                worksheet.write_rich_string(f + 2, 2, "R", exp, "2", center)
+                worksheet.write_rich_string(r + 2, 2, "R", exp, "2", center)
                 worksheet.write_array_formula(
-                    f + 3, 0, f + 3, 1,
-                    f"=LINEST(B3:B{f+1}, A3:A{f+1}, true, false)")
+                    r + 3, 0, r + 3, 1,
+                    f"=LINEST(B3:B{r+1}, A3:A{r+1}, true, false)")
 
-                worksheet.write_formula(f + 3, 2,
-                                        f"=(PEARSON(B3:B{f+1}, A3:A{f+1}))^2")
+                worksheet.write_formula(r + 3, 2,
+                                        f"=(PEARSON(B3:B{r+1}, A3:A{r+1}))^2")
                 scatter.add_series({
-                    'categories': f"'{nombre_muestra}'!$A$3:$A${f+1}",
-                    'values': f"'{nombre_muestra}'!$B$3:$B${f+1}",
+                    'categories': f"'{sample_name}'!$A$3:$A${r+1}",
+                    'values': f"'{sample_name}'!$B$3:$B${r+1}",
                     'trendline': {
                         'type': 'linear',
                         'display_equation': True,
@@ -112,16 +111,16 @@ def dict_to_xlsx(arch):
             worksheet.insert_chart("E1", scatter)
 
             # Escribir muestras
-            worksheet.write(f + 10, 0, "Muestra", center)
-            worksheet.write(f + 10, 1, "Área", center)
-            worksheet.write(f + 10, 2, "mg/L", center)
-            for fila, nombre in enumerate(samples, f + 11):
-                worksheet.write(fila, 0, nombre)
-                worksheet.write(fila, 1, samples[nombre][nombre_muestra])
+            worksheet.write(r + 10, 0, "Muestra", center)
+            worksheet.write(r + 10, 1, "Área", center)
+            worksheet.write(r + 10, 2, "mg/L", center)
+            for row, nombre in enumerate(samples, r + 11):
+                worksheet.write(row, 0, nombre)
+                worksheet.write(row, 1, samples[nombre][sample_name])
                 worksheet.write_formula(
-                    fila, 2,
-                    f"=(B{fila+1}-B{pos_n[0]+1})/A{pos_m[0]+1}",
-                    cell_format=decimales3)
+                    row, 2,
+                    f"=(B{row+1}-B{pos_n[0]+1})/A{pos_m[0]+1}",
+                    cell_format=decimals3)
 
         workbook.close()
 
