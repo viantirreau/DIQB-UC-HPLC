@@ -1,13 +1,17 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import (QPalette, QPixmap, qRgba, QStandardItem,
                          QStandardItemModel)
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QPushButton, \
     QFileDialog, QVBoxLayout, QHBoxLayout, QListView
-import os
-import urllib.parse
+import backend
 
 
 class Drop(QWidget):
+    add_path_signal = pyqtSignal(str)
+    add_drag_n_drop_path_signal = pyqtSignal(str)
+    remove_path_signal = pyqtSignal(str)
+    test_signal = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -30,9 +34,14 @@ class Drop(QWidget):
         lower_h_box.addStretch(10)
         lower_h_box.addWidget(self.btn_export)
 
-
         self.btn_load_files.clicked.connect(self.get_files)
         self.btn_remove_checked.clicked.connect(self.remove_checked)
+
+        pdf_back = backend.PDFToExcel(self)
+        self.add_path_signal.connect(pdf_back.add_paths)
+        self.add_drag_n_drop_path_signal.connect(pdf_back.add_paths_drag_n_drop)
+        self.test_signal.connect(pdf_back.test)
+        self.btn_export.clicked.connect(self.test)
 
         self.list = QListView(self)
         self.model = QStandardItemModel(self.list)
@@ -69,36 +78,7 @@ class Drop(QWidget):
 
     def dropEvent(self, event):
         files = event.mimeData().text()
-        for file in files.split('\n'):
-            if not file:
-                continue
-            raw_path = urllib.parse.urlparse(file).path
-            decoded = urllib.parse.unquote(raw_path)
-            os_path = os.path.normpath(decoded)
-            path_final = os_path
-            drive = os.path.splitdrive(path_final[1:])[0]
-            if drive:
-                path_final = path_final[1:]
-            print(path_final, os.path.isfile(path_final),
-                  os.path.splitext(path_final)[1] == ".pdf")
-
-        # if event.mimeData().hasFormat('application/pdf'):
-        #     print("PDF")
-        #     mime = event.mimeData()
-        #     item_data = mime.data('application/pdf')
-        #     data_stream = QDataStream(item_data, QIODevice.ReadOnly)
-        #
-        #     text = QByteArray()
-        #     offset = QPoint()
-        #     data_stream >> text >> offset
-        #
-        #     if event.source() in self.children():
-        #         event.setDropAction(Qt.MoveAction)
-        #         event.accept()
-        #     else:
-        #         event.acceptProposedAction()
-        # else:
-        #     event.ignore()
+        self.add_drag_n_drop_path_signal.emit(files)
 
     def get_files(self):
         files, _ = QFileDialog.getOpenFileNames(
@@ -107,7 +87,9 @@ class Drop(QWidget):
             "",
             "Archivos PDF (*.pdf)")
         if files:
-            print(files)
+            for file in files:
+                self.add_path_signal.emit(file)
+                print("Señal emitida desde Dialog", file)
 
     def remove_checked(self):
         model = self.list.model()
@@ -116,9 +98,30 @@ class Drop(QWidget):
             item = model.item(pos)
             if item.checkState() == Qt.Checked:
                 model.removeRow(pos)
+                self.remove_path_signal.emit(item.text())
             else:
                 pos += 1
 
+    def add_path_to_list(self, path_str):
+        model = self.list.model()
+        item = QStandardItem(path_str)
+        item.setCheckable(True)
+        item.setEditable(False)
+        model.appendRow(item)
+
+    def drop_path_from_list(self, path_str):
+        model = self.list.model()
+        pos = 0
+        while pos < model.rowCount():
+            item = model.item(pos)
+            if item.text() == path_str:
+                model.removeRow(pos)
+                break
+            pos += 1
+
+    def test(self):
+        print("FE Test!")
+        self.test_signal.emit()
 
 if __name__ == '__main__':
     import sys
