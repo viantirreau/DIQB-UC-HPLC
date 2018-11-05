@@ -38,31 +38,18 @@ class Drop(QWidget):
 
         self.back = backend.PDFToExcel(self)
         self.add_path_signal.connect(self.back.add_paths)
+        self.remove_path_signal.connect(self.back.remove_paths)
         self.add_drag_n_drop_path_signal.connect(
             self.back.add_paths_drag_n_drop)
 
         self.list = QListView(self)
         self.model = QStandardItemModel(self.list)
+        self.list.setModel(self.model)
         v_box.addWidget(self.btn_load_files)
         v_box.addWidget(self.list)
         v_box.addLayout(lower_h_box)
         h_box.addLayout(v_box)
         h_box.addStretch()
-
-        codes = [
-            'LOAA-05379',
-            'LOAA-04468',
-            'LOAA-03553',
-            'LOAA-02642',
-            'LOAA-05731'
-        ]
-
-        for code in codes:
-            item = QStandardItem(code)
-            item.setCheckable(True)
-            item.setEditable(False)
-            self.model.appendRow(item)
-        self.list.setModel(self.model)
 
         self.setLayout(h_box)
 
@@ -76,7 +63,6 @@ class Drop(QWidget):
 
     def dropEvent(self, event):
         files = event.mimeData().text()
-        self.test_signal.emit()
         self.add_drag_n_drop_path_signal.emit(files)
 
     def get_files(self):
@@ -88,18 +74,13 @@ class Drop(QWidget):
         if files:
             for file in files:
                 self.add_path_signal.emit(file)
-                print("Señal emitida desde Dialog", file)
 
     def remove_checked(self):
         model = self.list.model()
-        pos = 0
-        while pos < model.rowCount():
-            item = model.item(pos)
-            if item.checkState() == Qt.Checked:
-                model.removeRow(pos)
-                self.remove_path_signal.emit(item.text())
-            else:
-                pos += 1
+        to_be_removed = [model.item(i) for i in range(model.rowCount()) if
+                         model.item(i).checkState() == Qt.Checked]
+        for path in to_be_removed:
+            self.remove_path_signal.emit(path.text())
 
     def add_path_to_list(self, path_str):
         model = self.list.model()
