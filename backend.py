@@ -14,7 +14,6 @@ class PDFToExcel(QObject):
         self.front_add_path.connect(front_obj.add_path_to_list)
         self.front_remove_path.connect(front_obj.drop_path_from_list)
 
-    @pyqtSlot(str)
     def add_paths_drag_n_drop(self, paths):
         print("Back DnD: Me llamaron")
         for file in paths.split('\n'):
@@ -30,16 +29,12 @@ class PDFToExcel(QObject):
             if os.path.splitext(path_final)[1] == ".pdf":
                 self.add_paths(path_final)
 
-    @pyqtSlot(str)
     def add_paths(self, path):
         print("Back AddP: Me llamaron")
         display_name = os.path.basename(path)
         self.names_paths[display_name] = path
         self.front_add_path.emit(display_name)
 
-    @pyqtSlot(str)
     def remove_paths(self, path):
         self.names_paths.pop(path, None)
 
-    def test(self, *args):
-        print("Funciona!")

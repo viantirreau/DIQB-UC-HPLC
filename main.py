@@ -10,7 +10,6 @@ class Drop(QWidget):
     add_path_signal = pyqtSignal(str)
     add_drag_n_drop_path_signal = pyqtSignal(str)
     remove_path_signal = pyqtSignal(str)
-    test_signal = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -37,11 +36,10 @@ class Drop(QWidget):
         self.btn_load_files.clicked.connect(self.get_files)
         self.btn_remove_checked.clicked.connect(self.remove_checked)
 
-        pdf_back = backend.PDFToExcel(self)
-        self.add_path_signal.connect(pdf_back.add_paths)
-        self.add_drag_n_drop_path_signal.connect(pdf_back.add_paths_drag_n_drop)
-        self.test_signal.connect(pdf_back.test)
-        self.btn_export.clicked.connect(self.test)
+        self.back = backend.PDFToExcel(self)
+        self.add_path_signal.connect(self.back.add_paths)
+        self.add_drag_n_drop_path_signal.connect(
+            self.back.add_paths_drag_n_drop)
 
         self.list = QListView(self)
         self.model = QStandardItemModel(self.list)
@@ -78,6 +76,7 @@ class Drop(QWidget):
 
     def dropEvent(self, event):
         files = event.mimeData().text()
+        self.test_signal.emit()
         self.add_drag_n_drop_path_signal.emit(files)
 
     def get_files(self):
@@ -119,9 +118,6 @@ class Drop(QWidget):
                 break
             pos += 1
 
-    def test(self):
-        print("FE Test!")
-        self.test_signal.emit()
 
 if __name__ == '__main__':
     import sys
