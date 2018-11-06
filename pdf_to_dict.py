@@ -61,6 +61,8 @@ def read_pdf(path):
 
 def all_std_intersection(txt):
     stds = {k: v for k, v in txt.items() if re.match("^Std\d+", k)}
+    if not stds:
+        raise ValueError
     return reduce(set.intersection, [{i[0] for i in j} for j in stds.values()])
 
 

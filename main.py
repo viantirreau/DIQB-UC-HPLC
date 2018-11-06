@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import (QPalette, QStandardItem, QStandardItemModel)
+from PyQt5.QtGui import (QPalette, QStandardItem, QStandardItemModel, QColor)
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, \
     QFileDialog, QVBoxLayout, QHBoxLayout, QListView
 import backend
@@ -24,7 +24,7 @@ class Drop(QWidget):
 
         # Button creation
         self.btn_load_files = QPushButton("Cargar archivos", self)
-        self.btn_export = QPushButton("Exportar a Excel", self)
+        self.btn_export = QPushButton("Exportar todos a Excel", self)
         self.btn_remove_checked = QPushButton("Descartar seleccionados", self)
 
         # Button connection
@@ -110,10 +110,23 @@ class Drop(QWidget):
         path = QFileDialog.getExistingDirectory(self,
                                                 "Elegir carpeta para guardar "
                                                 "Excel's")
+        self.export_all_signal.emit(path)
 
-    def change_color_finished(self, event):
-        print(event)
-        pass
+    def change_color_finished(self, args):
+        file_name, res = args
+        model = self.list.model()
+        pos = 0
+        while pos < model.rowCount():
+            item = model.item(pos)
+            if item.text() == file_name:
+                if res:
+                    print("Vamos bien")
+                    item.setBackground(QColor('green'))
+                else:
+                    print("Vamos bien")
+                    item.setBackground(QColor('red'))
+                break
+            pos += 1
 
 
 if __name__ == '__main__':

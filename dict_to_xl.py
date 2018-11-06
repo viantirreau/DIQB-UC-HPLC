@@ -26,7 +26,10 @@ def dict_to_xlsx(arch, save_path):
     base = os.path.basename(arch)
     filename = os.path.splitext(base)[0]
     txt = read_pdf(arch)
-    samples, stds = split_samples_std(txt)
+    try:
+        samples, stds = split_samples_std(txt)
+    except ValueError:
+        return False
     if txt:
         names = all_std_intersection(txt)
         workbook = xlsxwriter.Workbook(
@@ -123,9 +126,10 @@ def dict_to_xlsx(arch, save_path):
                     cell_format=decimals3)
 
         workbook.close()
+        return True
 
 
 if __name__ == '__main__':
     dict_to_xlsx(
         'C:/Users/Victor/Documents/iPre/Script HPLC/sources/Series '
-        'carotenos_25.09.18.pdf', "C:/Users/Victor/Desktop/")
+        'carotenos_16.10.18_IS.pdf', "C:/Users/Victor/Desktop/")

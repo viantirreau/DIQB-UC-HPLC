@@ -49,9 +49,9 @@ class PDFToExcel(QObject):
         print("EXP", output_path)
         output_path = os.path.normpath(output_path)
         pool = QThreadPool()
-        for input_path in self.names_paths.values():
-            worker = Worker(dict_to_xlsx, input_path, output_path)
-            worker.signals.finished.connect(self.front.change_color_finished)
+        for front_name, input_path in self.names_paths.items():
+            worker = Worker(dict_to_xlsx, front_name, input_path, output_path)
+            worker.signals.result.connect(self.front.change_color_finished)
             pool.start(worker)
 
         pool.waitForDone()
@@ -59,16 +59,23 @@ class PDFToExcel(QObject):
 
 class WorkerSignals(QObject):
     finished = pyqtSignal()
+    error = pyqtSignal(tuple)
+    result = pyqtSignal(tuple)
+    progress = pyqtSignal(int)
 
 
 class Worker(QRunnable):
-    def __init__(self, task, *args, **kwargs):
+    def __init__(self, task, name, *args, **kwargs):
         super().__init__()
         self.task = task
+        self.front_name = name
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()
 
     def run(self):
-        self.task(*self.args, **self.kwargs)
-        self.signals.finished.emit()
+        res = self.task(*self.args, **self.kwargs)
+        if res:
+            self.signals.result.emit((self.front_name, True))
+        else:
+            self.signals.result.emit((self.front_name, False))
