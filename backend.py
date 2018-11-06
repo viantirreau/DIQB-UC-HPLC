@@ -1,6 +1,7 @@
-from PyQt5.QtCore import pyqtSignal, QObject, pyqtSlot
+from PyQt5.QtCore import pyqtSignal, QObject, QThreadPool, QRunnable
 import urllib.parse
 import os
+from dict_to_xl import dict_to_xlsx
 
 
 class PDFToExcel(QObject):
@@ -10,8 +11,9 @@ class PDFToExcel(QObject):
     def __init__(self, front_obj):
         super().__init__()
         self.names_paths = {}
-        self.front_add_path.connect(front_obj.add_path_to_list)
-        self.front_remove_path.connect(front_obj.drop_path_from_list)
+        self.front = front_obj
+        self.front_add_path.connect(self.front.add_path_to_list)
+        self.front_remove_path.connect(self.front.drop_path_from_list)
 
     def add_paths_drag_n_drop(self, paths):
         for file in paths.split('\n'):
@@ -42,3 +44,31 @@ class PDFToExcel(QObject):
     def remove_paths(self, path):
         self.names_paths.pop(path, None)
         self.front_remove_path.emit(path)
+
+    def export_pdf_to_excel(self, output_path):
+        print("EXP", output_path)
+        output_path = os.path.normpath(output_path)
+        pool = QThreadPool()
+        for input_path in self.names_paths.values():
+            worker = Worker(dict_to_xlsx, input_path, output_path)
+            worker.signals.finished.connect(self.front.change_color_finished)
+            pool.start(worker)
+
+        pool.waitForDone()
+
+
+class WorkerSignals(QObject):
+    finished = pyqtSignal()
+
+
+class Worker(QRunnable):
+    def __init__(self, task, *args, **kwargs):
+        super().__init__()
+        self.task = task
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+    def run(self):
+        self.task(*self.args, **self.kwargs)
+        self.signals.finished.emit()

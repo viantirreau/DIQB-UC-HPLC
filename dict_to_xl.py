@@ -1,4 +1,3 @@
-import pandas as pd
 import numpy as np
 import xlsxwriter
 from pdf_to_dict import split_samples_std, read_pdf, all_std_intersection
@@ -23,14 +22,15 @@ def linear_fit_zero_n(x_vals, y_vals):
     return np.linalg.lstsq(x, y)[0]
 
 
-def dict_to_xlsx(arch):
+def dict_to_xlsx(arch, save_path):
     base = os.path.basename(arch)
     filename = os.path.splitext(base)[0]
     txt = read_pdf(arch)
     samples, stds = split_samples_std(txt)
     if txt:
         names = all_std_intersection(txt)
-        workbook = xlsxwriter.Workbook(f'Resultados {filename}.xlsx')
+        workbook = xlsxwriter.Workbook(
+            os.path.join(save_path, f'Resultados {filename}.xlsx'))
         for sample_name in names:
             worksheet = workbook.add_worksheet(sample_name)
 
@@ -125,4 +125,7 @@ def dict_to_xlsx(arch):
         workbook.close()
 
 
-dict_to_xlsx('sources/Series carotenos_25.09.18.pdf')
+if __name__ == '__main__':
+    dict_to_xlsx(
+        'C:/Users/Victor/Documents/iPre/Script HPLC/sources/Series '
+        'carotenos_25.09.18.pdf', "C:/Users/Victor/Desktop/")

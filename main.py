@@ -1,7 +1,6 @@
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import (QPalette, QPixmap, qRgba, QStandardItem,
-                         QStandardItemModel)
-from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QPushButton, \
+from PyQt5.QtGui import (QPalette, QStandardItem, QStandardItemModel)
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, \
     QFileDialog, QVBoxLayout, QHBoxLayout, QListView
 import backend
 
@@ -10,47 +9,55 @@ class Drop(QWidget):
     add_path_signal = pyqtSignal(str)
     add_drag_n_drop_path_signal = pyqtSignal(str)
     remove_path_signal = pyqtSignal(str)
+    export_all_signal = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
+        # Window creation
         bg = self.palette()
         bg.setColor(QPalette.Window, Qt.white)
         self.setPalette(bg)
-        h_box = QHBoxLayout()
-        h_box.addStretch()
-        v_box = QVBoxLayout()
-
-        # self.setMinimumSize(280, 350)
         self.setFixedSize(280, 350)
         self.setWindowTitle("HPLC a Excel")
         self.setAcceptDrops(True)
+
+        # Button creation
         self.btn_load_files = QPushButton("Cargar archivos", self)
-        lower_h_box = QHBoxLayout()
         self.btn_export = QPushButton("Exportar a Excel", self)
         self.btn_remove_checked = QPushButton("Descartar seleccionados", self)
-        lower_h_box.addWidget(self.btn_remove_checked)
-        lower_h_box.addStretch(10)
-        lower_h_box.addWidget(self.btn_export)
 
+        # Button connection
         self.btn_load_files.clicked.connect(self.get_files)
         self.btn_remove_checked.clicked.connect(self.remove_checked)
+        self.btn_export.clicked.connect(self.open_export_dialog)
 
+        # Signal connection
         self.back = backend.PDFToExcel(self)
         self.add_path_signal.connect(self.back.add_paths)
         self.remove_path_signal.connect(self.back.remove_paths)
         self.add_drag_n_drop_path_signal.connect(
             self.back.add_paths_drag_n_drop)
+        self.export_all_signal.connect(self.back.export_pdf_to_excel)
 
+        # List
         self.list = QListView(self)
         self.model = QStandardItemModel(self.list)
         self.list.setModel(self.model)
+
+        # Layout
+        lower_h_box = QHBoxLayout()
+        lower_h_box.addWidget(self.btn_remove_checked)
+        lower_h_box.addStretch(10)
+        lower_h_box.addWidget(self.btn_export)
+        v_box = QVBoxLayout()
         v_box.addWidget(self.btn_load_files)
         v_box.addWidget(self.list)
         v_box.addLayout(lower_h_box)
+        h_box = QHBoxLayout()
+        h_box.addStretch()
         h_box.addLayout(v_box)
         h_box.addStretch()
-
         self.setLayout(h_box)
 
     def dragEnterEvent(self, event):
@@ -98,6 +105,15 @@ class Drop(QWidget):
                 model.removeRow(pos)
                 break
             pos += 1
+
+    def open_export_dialog(self):
+        path = QFileDialog.getExistingDirectory(self,
+                                                "Elegir carpeta para guardar "
+                                                "Excel's")
+
+    def change_color_finished(self, event):
+        print(event)
+        pass
 
 
 if __name__ == '__main__':
