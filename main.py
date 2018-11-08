@@ -94,7 +94,7 @@ class Drop(QWidget):
         to_be_removed = [model.item(i) for i in range(model.rowCount()) if
                          model.item(i).checkState() == Qt.Checked]
         for path in to_be_removed:
-            self.remove_path_signal.emit(path.text())
+            self.remove_path_signal.emit(path.file_name)
 
     def add_path_to_list(self, path_str):
         model = self.list.model()
@@ -128,7 +128,7 @@ class Drop(QWidget):
         while pos < model.rowCount():
             item = model.item(pos)
             if item.file_name == file_name:
-                if res:
+                if res == 0:
                     item.setBackground(QColor(200, 250, 200))
                     item.setToolTip(f"Procesado correcto - {file_name}")
                     text = item.file_name
@@ -137,12 +137,30 @@ class Drop(QWidget):
                     item.setText(text)
                 else:
                     item.setBackground(QColor(250, 150, 150))
-                    item.setToolTip(
-                        f"ERROR: El archivo {file_name} no tiene estándares")
-                    text = item.file_name
-                    text = text[:17] + "..." if len(text) > 21 else text
-                    text += "  no tiene estándares"
-                    item.setText(text)
+                    if res == 1:
+                        item.setToolTip(
+                            f"ERROR: El archivo {file_name} no tiene "
+                            f"estándares")
+                        text = item.file_name
+                        text = text[:17] + "..." if len(text) > 21 else text
+                        text += "  no tiene estándares"
+                        item.setText(text)
+                    if res == 2:
+                        item.setToolTip(
+                            f"ERROR: El archivo {file_name} está abierto por"
+                            f" otro programa")
+                        text = item.file_name
+                        text = text[:17] + "..." if len(text) > 21 else text
+                        text += "  está en uso por otro programa"
+                        item.setText(text)
+                    if res == 3:
+                        item.setToolTip(
+                            f"ERROR: El archivo {file_name} dio un error "
+                            f"desconocido")
+                        text = item.file_name
+                        text = text[:17] + "..." if len(text) > 21 else text
+                        text += "  error desconocido"
+                        item.setText(text)
                 break
             pos += 1
 

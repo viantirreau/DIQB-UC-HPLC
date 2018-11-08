@@ -79,8 +79,11 @@ class Worker(QRunnable):
     def run(self):
         self.signals.progress.emit(self.front_name)
         res = self.task(*self.args, **self.kwargs)
-        if res:
-            self.signals.result.emit((self.front_name, True))
-
+        if res == 0:
+            self.signals.result.emit((self.front_name, 0))
+        elif res == 1:
+            self.signals.result.emit((self.front_name, 1))
+        elif res == 2:
+            self.signals.result.emit((self.front_name, 2))
         else:
-            self.signals.result.emit((self.front_name, False))
+            self.signals.result.emit((self.front_name, 3))
