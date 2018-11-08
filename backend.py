@@ -1,4 +1,5 @@
-from PyQt5.QtCore import pyqtSignal, QObject, QThreadPool, QRunnable
+from PyQt5.QtCore import pyqtSignal, QObject, QThreadPool, QRunnable, \
+    pyqtSlot, QThread
 import urllib.parse
 import os
 from dict_to_xl import dict_to_xlsx
@@ -46,14 +47,15 @@ class PDFToExcel(QObject):
         self.front_remove_path.emit(path)
 
     def export_pdf_to_excel(self, output_path):
-        print("EXP", output_path)
         output_path = os.path.normpath(output_path)
         pool = QThreadPool()
+        pool.setMaxThreadCount(2)
         for front_name, input_path in self.names_paths.items():
-            worker = Worker(dict_to_xlsx, front_name, input_path, output_path)
+            worker = Worker(dict_to_xlsx, front_name, input_path,
+                            output_path)
+            worker.signals.progress.connect(self.front.change_color_started)
             worker.signals.result.connect(self.front.change_color_finished)
-            pool.start(worker)
-
+            pool.globalInstance().start(worker)  # .globalInstance() is the key!
         pool.waitForDone()
 
 
@@ -61,7 +63,7 @@ class WorkerSignals(QObject):
     finished = pyqtSignal()
     error = pyqtSignal(tuple)
     result = pyqtSignal(tuple)
-    progress = pyqtSignal(int)
+    progress = pyqtSignal(str)
 
 
 class Worker(QRunnable):
@@ -73,9 +75,12 @@ class Worker(QRunnable):
         self.kwargs = kwargs
         self.signals = WorkerSignals()
 
+    @pyqtSlot()
     def run(self):
+        self.signals.progress.emit(self.front_name)
         res = self.task(*self.args, **self.kwargs)
         if res:
             self.signals.result.emit((self.front_name, True))
+
         else:
             self.signals.result.emit((self.front_name, False))

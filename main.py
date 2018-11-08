@@ -1,8 +1,15 @@
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import (QPalette, QStandardItem, QStandardItemModel, QColor)
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, \
     QFileDialog, QVBoxLayout, QHBoxLayout, QListView
 import backend
+import sys
+
+
+class CustomStandardItem(QStandardItem):
+    def __init__(self, path_str):
+        super().__init__(path_str)
+        self.file_name = path_str
 
 
 class Drop(QWidget):
@@ -91,8 +98,9 @@ class Drop(QWidget):
 
     def add_path_to_list(self, path_str):
         model = self.list.model()
-        item = QStandardItem(path_str)
+        item = CustomStandardItem(path_str)
         item.setCheckable(True)
+        item.setToolTip("Aún no procesado")
         item.setEditable(False)
         model.appendRow(item)
 
@@ -101,7 +109,7 @@ class Drop(QWidget):
         pos = 0
         while pos < model.rowCount():
             item = model.item(pos)
-            if item.text() == path_str:
+            if item.file_name == path_str:
                 model.removeRow(pos)
                 break
             pos += 1
@@ -112,27 +120,58 @@ class Drop(QWidget):
                                                 "Excel's")
         self.export_all_signal.emit(path)
 
+    @pyqtSlot(tuple)
     def change_color_finished(self, args):
         file_name, res = args
         model = self.list.model()
         pos = 0
         while pos < model.rowCount():
             item = model.item(pos)
-            if item.text() == file_name:
+            if item.file_name == file_name:
                 if res:
-                    print("Vamos bien")
-                    item.setBackground(QColor('green'))
+                    item.setBackground(QColor(200, 250, 200))
+                    item.setToolTip(f"Procesado correcto - {file_name}")
+                    text = item.file_name
+                    text = text[:34] + "..." if len(text) > 37 else text
+                    text = "OK   " + text.ljust(38)
+                    item.setText(text)
                 else:
-                    print("Vamos bien")
-                    item.setBackground(QColor('red'))
+                    item.setBackground(QColor(250, 150, 150))
+                    item.setToolTip(
+                        f"ERROR: El archivo {file_name} no tiene estándares")
+                    text = item.file_name
+                    text = text[:17] + "..." if len(text) > 21 else text
+                    text += "  no tiene estándares"
+                    item.setText(text)
+                break
+            pos += 1
+
+    @pyqtSlot(str)
+    def change_color_started(self, file_name):
+        model = self.list.model()
+        pos = 0
+        while pos < model.rowCount():
+            item = model.item(pos)
+            if item.text() == file_name:
+                item.setBackground(QColor(200, 200, 250))
+                item.setToolTip(f"Procesando {file_name}")
+                text = item.file_name
+                text = text[:25] + "..." if len(text) > 28 else text
+                text += "  procesando"
+                item.setText(text)
                 break
             pos += 1
 
 
 if __name__ == '__main__':
-    import sys
+    def hook(type, value, traceback):
+        print(type)
+        print(traceback)
 
-    app = QApplication(sys.argv)
+
+    sys.__excepthook__ = hook
+
+    app = QApplication([])
     window = Drop()
     window.show()
     sys.exit(app.exec_())
