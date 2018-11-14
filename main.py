@@ -2,7 +2,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import (QPalette, QStandardItem, QStandardItemModel, QColor,
                          QIcon)
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, \
-    QFileDialog, QVBoxLayout, QHBoxLayout, QListView
+    QFileDialog, QVBoxLayout, QHBoxLayout, QListView, QLabel
 import backend
 import sys
 
@@ -35,6 +35,11 @@ class Drop(QWidget):
         self.btn_export = QPushButton("Exportar todos a Excel", self)
         self.btn_remove_checked = QPushButton("Descartar seleccionados", self)
 
+        # Label creation
+        self.copyright = QLabel("DIQB UC - Víctor Tirreau - 2018", self)
+        self.copyright.setStyleSheet("color: #444444;")
+        self.copyright.setAlignment(Qt.AlignCenter)
+
         # Button connection
         self.btn_load_files.clicked.connect(self.get_files)
         self.btn_remove_checked.clicked.connect(self.remove_checked)
@@ -62,6 +67,7 @@ class Drop(QWidget):
         v_box.addWidget(self.btn_load_files)
         v_box.addWidget(self.list)
         v_box.addLayout(lower_h_box)
+        v_box.addWidget(self.copyright)
         h_box = QHBoxLayout()
         h_box.addStretch()
         h_box.addLayout(v_box)
