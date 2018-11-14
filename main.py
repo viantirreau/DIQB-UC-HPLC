@@ -1,5 +1,6 @@
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import (QPalette, QStandardItem, QStandardItemModel, QColor)
+from PyQt5.QtGui import (QPalette, QStandardItem, QStandardItemModel, QColor,
+                         QIcon)
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, \
     QFileDialog, QVBoxLayout, QHBoxLayout, QListView
 import backend
@@ -190,6 +191,7 @@ if __name__ == '__main__':
     sys.__excepthook__ = hook
 
     app = QApplication([])
+    app.setWindowIcon(QIcon("ui/Logo.png"))
     window = Drop()
     window.show()
     sys.exit(app.exec_())
