@@ -22,7 +22,7 @@ def linear_fit_zero_n(x_vals, y_vals):
     return np.linalg.lstsq(x, y)[0]
 
 
-def dict_to_xlsx(arch, save_path):
+def dict_to_xlsx(arch, save_path, *args):
     """
     :param arch: Path to PDF to be read
     :param save_path: Path for .xlsx file ti be written to
@@ -33,7 +33,7 @@ def dict_to_xlsx(arch, save_path):
     base = os.path.basename(arch)
     filename = os.path.splitext(base)[0]
     try:
-        txt = read_pdf(arch)
+        txt = read_pdf(arch, *args)
     except PermissionError:
         return 2
     try:
