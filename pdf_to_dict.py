@@ -4,7 +4,6 @@ from pdfminer.converter import PDFPageAggregator, TextConverter
 from pdfminer.layout import LAParams, LTTextBox
 import re
 import io
-from collections import defaultdict
 from functools import reduce
 import os
 import time
@@ -51,23 +50,23 @@ def read_pdf(path, report_progress_sgn):
         doc.initialize('')
         rsrcmgr = PDFResourceManager()
         laparams = LAParams()
-        laparams.char_margin = 200  # 200  Clave para regular separación por \n
-        laparams.word_margin = 2  # 2 Parece afectar negativamente para >4
+        laparams.char_margin = 200  # 200  Seems important for \n separation
+        laparams.word_margin = 2  # 2 Seems to break for >4
         # device = PDFPageAggregator(rsrcmgr, laparams=laparams)
         retstr = io.StringIO()
         device = TextConverter(rsrcmgr, retstr, laparams=laparams)
         interpreter = PDFPageInterpreter(rsrcmgr, device)
         sample_names_set = set()
+        molecule_names_set = set()
         sample_types = {}
         last_sample_name = None
         processed = {"samples": {},
                      "standards": {},
                      "int_standards": {}}
 
-        # Process each page contained in the document.
         tot_pages = resolve1(doc.catalog["Pages"])["Count"]
-
         print("Total:", tot_pages)
+        # Process each page contained in the document.
         for n, page in enumerate(doc.get_pages(), 1):
             if report_progress_sgn:
                 report_progress_sgn.emit(n)
@@ -78,8 +77,6 @@ def read_pdf(path, report_progress_sgn):
             text = retstr.getvalue()
             is_standard = False
             sample_name = None
-
-            # print(text)
 
             if BLANK.search(text):
                 print("BLANCO")
@@ -102,8 +99,8 @@ def read_pdf(path, report_progress_sgn):
 
             if sample_name not in sample_names_set:
                 sample_names_set.add(sample_name)
-            # They are separated by more than a page
-            # with recognized sample names, so they should be treated as
+            # If the same sample names are separated by more than a page
+            # (with recognized sample names), they should be treated as
             # different samples, hence the name change.
             elif last_sample_name != sample_name:
                 sample_name += "_1"
@@ -131,7 +128,6 @@ def read_pdf(path, report_progress_sgn):
             for line in text.split("\n"):
                 if all(i in line for i in ("Area", "Name")):
                     col_names = [i for i in line.split(" ") if not i.isdigit()]
-                    # print(f"Detectadas {len(col_names)} columnas")
                     data_section = True
                     continue
                 if data_section:
@@ -147,7 +143,6 @@ def read_pdf(path, report_progress_sgn):
                     # Not a full row, not enough data available
                     if len(vals) < len(col_names):
                         continue
-                    # print(f"Line with fields {vals} ({len(vals)})")
                     if len(vals) > len(col_names):
                         # Account for a longer-than-expected Name field
                         # with spaces (which are the delimiters)
@@ -170,14 +165,13 @@ def read_pdf(path, report_progress_sgn):
                         # The only values left should be the Name with spaces
                         if len(vals) > 0 and len(col_names_) > 0:
                             line_dict["Name"] = " ".join(vals)
-                        # print(line_dict)
                     else:
                         started_saving_data = True
                         line_dict = {k: v for k, v in zip(col_names, vals)}
-                        # print(line_dict)
                     # By now, line_dict should be filled with the sought values
                     if "Name" in line_dict and "Area" in line_dict:
                         name, area = line_dict["Name"], line_dict["Area"]
+                        molecule_names_set.add(name)
                         try:
                             area = float(area.replace(",", "."))
                         except ValueError:
@@ -212,12 +206,10 @@ def read_pdf(path, report_progress_sgn):
                             else:
                                 processed["samples"][sample_name] = {name: area}
 
-                            # print(text)
-
             retstr.truncate(0)
             retstr.seek(0)
-            # layout = device.get_result()
             """
+            layout = device.get_result()
             for lt_obj in layout:
                 if isinstance(lt_obj, LTTextBox):
                     for subgroup in lt_obj.get_text().split("\n"):
@@ -243,7 +235,9 @@ def read_pdf(path, report_progress_sgn):
                 """
     print(processed)
     print(sample_types)
-    return tot_pages
+    print(molecule_names_set)
+    # return tot_pages
+    return processed, sorted(list(molecule_names_set))
 
 
 def all_std_intersection(txt):
@@ -285,12 +279,12 @@ def split_samples_std(txt):
 
 
 if __name__ == '__main__':
-    c = 0
-    t0 = time.time()
-    for file in os.listdir(os.getcwd()):
-        if file.endswith(".pdf"):
-            print(file)
-            c += read_pdf(file, None)
-    t_tot = time.time() - t0
-    print(f"Procesadas {c} páginas en {t_tot:.4f} s -> {c/t_tot:.4f} p/s")
-    # print(split_samples_std(read_pdf('Series Azucares_11.10.18.pdf', None)))
+    # c = 0
+    # t0 = time.time()
+    # for file in os.listdir(os.getcwd()):
+    #     if file.endswith(".pdf"):
+    #         print(file)
+    #         c += read_pdf(file, None)
+    # t_tot = time.time() - t0
+    # print(f"Procesadas {c} páginas en {t_tot:.4f} s -> {c/t_tot:.4f} p/s")
+    read_pdf("Series Azucares_30.11.18.pdf", None)

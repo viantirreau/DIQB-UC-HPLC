@@ -1,6 +1,6 @@
 import numpy as np
 import xlsxwriter
-from pdf_to_dict import split_samples_std, read_pdf, all_std_intersection
+from pdf_to_dict import read_pdf
 import os.path
 
 
@@ -22,67 +22,109 @@ def linear_fit_zero_n(x_vals, y_vals):
     return np.linalg.lstsq(x, y)[0]
 
 
-def dict_to_xlsx(arch, save_path, *args):
+def dict_to_xlsx(arch, save_path, sgn_progress):
     """
     :param arch: Path to PDF to be read
     :param save_path: Path for .xlsx file ti be written to
     :return:    0: File processed and saved successfully
                 1: File lacks standard areas for molecule concentration
                 2: File is locked
+                3: Error in processing
     """
     base = os.path.basename(arch)
     filename = os.path.splitext(base)[0]
     try:
-        txt = read_pdf(arch, *args)
+        result, molecule_names = read_pdf(arch, sgn_progress)
     except PermissionError:
         return 2
-    try:
-        samples, stds = split_samples_std(txt)
-    except ValueError:
-        return 1
-    if txt:
-        names = all_std_intersection(txt)
+    # if not result.get("standards"):
+    #     return 1
+    # try:
+    #     samples, stds = split_samples_std(txt)
+    # except ValueError:
+    #     return 1
+    if all(i in result for i in ("standards", "samples", "int_standards")):
+        samples = result["samples"]
+        standards = result["standards"]
+        if "Cìtrico" in standards:
+            standards.pop("Cìtrico")
+        int_standards = result["int_standards"]
         try:
             workbook = xlsxwriter.Workbook(
                 os.path.join(save_path, f'Resultados {filename}.xlsx'))
         except PermissionError:
             return 2
-        for sample_name in names:
-            worksheet = workbook.add_worksheet(sample_name)
 
-            # Styles
-            exp = workbook.add_format()
-            exp.set_font_script(1)
-            center = workbook.add_format()
-            center.set_align("center")
-            center.set_align("vcenter")
-            right = workbook.add_format()
-            right.set_align("right")
-            decimals3 = workbook.add_format()
-            decimals3.set_num_format("0.000")
-            light_blue = workbook.add_format()
-            light_blue.set_bg_color("#CCCCFF")
+        # Styles
+        exp = workbook.add_format()
+        exp.set_font_script(1)
+        center = workbook.add_format()
+        center.set_align("center")
+        center.set_align("vcenter")
+        center_ = workbook.add_format()
+        center_.set_align("center")
+        center_.set_align("vcenter")
+        center_.set_border(1)
+        right = workbook.add_format()
+        right.set_align("right")
+        decimals3 = workbook.add_format()
+        decimals3.set_num_format("0.000")
+        light_blue = workbook.add_format()
+        light_blue.set_bg_color("#CCCCFF")
+        red = workbook.add_format()
+        red.set_bg_color("#FFAAAA")
+        red.set_align("center")
+        red.set_align("vcenter")
 
-            # Write calibration
-            worksheet.merge_range('A1:B1', "Curva de calibrado",
-                                  cell_format=center)
-            worksheet.write('A2', "mg/L", center)
-            worksheet.write('B2', "Área", center)
-            r = 0
-            for row, conc in enumerate(stds, 2):
-                worksheet.write(row, 0, conc)  # Concentration
-                worksheet.write(row, 1, stds[conc][sample_name])  # Area
-                r = row
+        for molecule in molecule_names:
+            worksheet = workbook.add_worksheet(molecule)
+            worksheet.set_column(0, 0, 3)
+            worksheet.set_row(0, 9)
 
+            if molecule not in standards:
+                worksheet.merge_range('B2:F2',
+                                      "DATOS DE CALIBRADO NO ENCONTRADOS",
+                                      cell_format=red)
+                worksheet.write('B4', "Muestra", center_)
+                worksheet.write('C4', "Área", center_)
+                alphabetic = sorted(list(samples.keys()))
+                for row, smpl in enumerate(alphabetic, 4):
+                    area = samples[smpl].get(molecule, 0)
+                    worksheet.write(row, 1, smpl, center_)
+                    worksheet.write_number(row, 2, area, center_)
+
+            else:
+                # Write calibration
+                worksheet.merge_range('B2:C2', f"STD {molecule}",
+                                      cell_format=center_)
+                worksheet.merge_range('B3:C3', "Curva de calibrado",
+                                      cell_format=center_)
+                worksheet.write('B4', "Conc.", center_)
+                worksheet.write('C4', "Área", center_)
+                increasing = sorted(list(standards[molecule].keys()))
+                r = 0
+                for r_, conc in enumerate(increasing, 4):
+                    r = r_
+                    area = standards[molecule][conc]
+                    worksheet.write_number(r, 1, conc, center_)
+                    worksheet.write_number(r, 2, area, center_)
+                linear_fit_row = r + 2
+
+                # Check for non-negative concentrations
+                x_vals, y_vals = increasing, [standards[molecule][i] for i in
+                                              increasing]
+                with_intercept = linear_fit(x_vals, y_vals)
+
+                # worksheet.write(r + 2, 0, "m", center)
+                # worksheet.write(r + 2, 1, "n", center)
+
+        """
+        for sample_name in samples:
             # Ver si no hay concentraciones negativas
-            x_vals, y_vals = list(stds.keys()), [std[sample_name] for std in
-                                                 stds.values()]
+            
             sample_vals = [sampl[sample_name] for sampl in samples.values() if
                            sample_name in sampl]
-            with_intercept = linear_fit(x_vals, y_vals)
-
-            worksheet.write(r + 2, 0, "m", center)
-            worksheet.write(r + 2, 1, "n", center)
+            
             pos_m = (r + 3, 0)
             pos_n = (r + 3, 1)
             scatter = workbook.add_chart(
@@ -153,14 +195,15 @@ def dict_to_xlsx(arch, save_path, *args):
                 worksheet.write_formula(
                     row, 6, f"=C{row+1}/(F{row+1}*1000)"
                 )
+                """
         try:
             workbook.close()
         except PermissionError:
             return 2
         return 0
+    return 3
 
 
 if __name__ == '__main__':
-    dict_to_xlsx(
-        'C:/Users/Victor/Documents/iPre/Script HPLC/sources/Series '
-        'carotenos_16.10.18_IS.pdf', "C:/Users/Victor/Desktop/")
+    print(dict_to_xlsx(
+        'Series Azucares_30.11.18.pdf', "C:/Users/Victor/Desktop/", None))
