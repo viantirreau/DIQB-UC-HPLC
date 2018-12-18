@@ -12,20 +12,35 @@ import time
 # RegEx compiles
 F = re.MULTILINE | re.IGNORECASE
 EMPTY = re.compile(r"^( |\d|,)+$", F)
-SAMPLE_NAME = re.compile(r"Sample Name:\s*(.+)$", F)
-BLANK = re.compile(r"^Sample Name:\s*BCO", F)
+SAMPLE_NAME = re.compile(r"(?:Sample Name|Nombre de la muestra):\s*(.+)$", F)
+BLANK = re.compile(r"(?:Sample Name|Nombre de la muestra):\s*BCO", F)
 DETECTION = re.compile(r"\d+\s\w*\s( |\d|,)*", F)
 INNER_DET = re.compile(r"^\d+\s(\w*(?:\s\w*)*)\s( |\d|,)+", F)
 VERTICAL_TEXT = re.compile(r"\s((?!0)(\S\s+)+)0 (\d+ +)+", F)
-STD_SAMPLE_NAME = re.compile(r"^Sample Name:\s*St", F)
-STD_VIAL_TYPE = re.compile(r"^Vial type:\s*std", F)
+STD_SAMPLE_NAME = re.compile(r"(?:Sample Name|Nombre de la muestra):\s*St", F)
+STD_VIAL_TYPE = re.compile(r"(Vial Type|Tipo):\s*std", F)
 
 
 def read_pdf(path, report_progress_sgn):
     """
-    Lee el archivo pdf proporcionado en path.
-    Retorna un diccionario con el formato
-    {sample_name: [[molecule1, area1], [molecule2, area2]]}
+    Reads the pdf file given in path and reports progress if a signal is given
+
+    :return: Dict with format
+    {"samples":
+        {"sample_name_1":
+            {"molecule_1": area_m1, "molecule_2": area_m2}
+        }
+     "standards":
+        {"molecule_1":
+            {concentration_1: area_1, concentration_2: area_2}
+        }
+     "int_standards":
+        {"sample_name_1":
+            {"molecule_1": area_m1}
+         "sample_name_2":
+            {"molecule_1": area_m1}
+        }
+    }
     """
     # https://stackoverflow.com/a/45103154
     with open(path, "rb") as file_content:
@@ -42,21 +57,29 @@ def read_pdf(path, report_progress_sgn):
         retstr = io.StringIO()
         device = TextConverter(rsrcmgr, retstr, laparams=laparams)
         interpreter = PDFPageInterpreter(rsrcmgr, device)
-        dict_samples = defaultdict(list)
-        last_sample = "undefined"
+        sample_names_set = set()
+        sample_types = {}
+        last_sample_name = None
+        processed = {"samples": {},
+                     "standards": {},
+                     "int_standards": {}}
 
         # Process each page contained in the document.
         tot_pages = resolve1(doc.catalog["Pages"])["Count"]
+
         print("Total:", tot_pages)
         for n, page in enumerate(doc.get_pages(), 1):
             if report_progress_sgn:
                 report_progress_sgn.emit(n)
             else:
-                print("-" * 20 + "\n", n, '\n')
+                pass
+                # print("-" * 20 + "\n", n, '\n')
             interpreter.process_page(page)
             text = retstr.getvalue()
+            is_standard = False
+            sample_name = None
 
-            print(text)
+            # print(text)
 
             if BLANK.search(text):
                 print("BLANCO")
@@ -65,12 +88,38 @@ def read_pdf(path, report_progress_sgn):
                 continue
 
             if STD_SAMPLE_NAME.search(text) or STD_VIAL_TYPE.search(text):
-                print("STD")
-                retstr.truncate(0)
-                retstr.seek(0)
-                continue
+                is_standard = True
 
-            print(SAMPLE_NAME.findall(text))
+            found_sample_name = SAMPLE_NAME.findall(text)
+            if len(found_sample_name) > 0:
+                if found_sample_name[0] != "":
+                    sample_name = found_sample_name[0]
+
+            if sample_name is None:
+                continue  # Probably an almost empty page
+            if sample_name == "":
+                sample_name = "Sin nombre"
+
+            if sample_name not in sample_names_set:
+                sample_names_set.add(sample_name)
+            # They are separated by more than a page
+            # with recognized sample names, so they should be treated as
+            # different samples, hence the name change.
+            elif last_sample_name != sample_name:
+                sample_name += "_1"
+                sample_names_set.add(sample_name)
+
+            last_sample_name = sample_name
+
+            # Deal with multi-page standards
+            if sample_name not in sample_types:
+                if is_standard:
+                    sample_types[sample_name] = "standard"
+                else:
+                    sample_types[sample_name] = "sample"
+            elif sample_types[sample_name] == "standard":
+                is_standard = True
+
             # vert = VERTICAL_TEXT.findall(text)
             # if vert:
             #     if vert[0]:
@@ -82,7 +131,7 @@ def read_pdf(path, report_progress_sgn):
             for line in text.split("\n"):
                 if all(i in line for i in ("Area", "Name")):
                     col_names = [i for i in line.split(" ") if not i.isdigit()]
-                    print(f"Detectadas {len(col_names)} columnas")
+                    # print(f"Detectadas {len(col_names)} columnas")
                     data_section = True
                     continue
                 if data_section:
@@ -98,32 +147,72 @@ def read_pdf(path, report_progress_sgn):
                     # Not a full row, not enough data available
                     if len(vals) < len(col_names):
                         continue
-                    print(f"Line with fields {vals} ({len(vals)})")
+                    # print(f"Line with fields {vals} ({len(vals)})")
                     if len(vals) > len(col_names):
+                        # Account for a longer-than-expected Name field
+                        # with spaces (which are the delimiters)
                         started_saving_data = True
                         col_names_ = col_names[:]
-                        print(line)
+                        # print(line)
                         positive_name_col_idx = col_names_.index("Name")
                         reverse_name_col_idx = positive_name_col_idx - len(
                             col_names_) + 1
-                        started_saving_data = True
                         line_dict = {}
+                        # Add elements from the left of the Name column
                         for positive_idx in range(positive_name_col_idx):
                             col_name, value = col_names_.pop(0), vals.pop(0)
                             line_dict[col_name] = value
+                        # Add elements by reverse indexing to the right of Name
                         for negative_idx in range(reverse_name_col_idx, 0):
                             col_name = col_names_.pop(negative_idx)
                             value = vals.pop(negative_idx)
                             line_dict[col_name] = value
+                        # The only values left should be the Name with spaces
                         if len(vals) > 0 and len(col_names_) > 0:
                             line_dict["Name"] = " ".join(vals)
-                        print(line_dict)
+                        # print(line_dict)
                     else:
                         started_saving_data = True
                         line_dict = {k: v for k, v in zip(col_names, vals)}
-                        print(line_dict)
+                        # print(line_dict)
+                    # By now, line_dict should be filled with the sought values
+                    if "Name" in line_dict and "Area" in line_dict:
+                        name, area = line_dict["Name"], line_dict["Area"]
+                        try:
+                            area = float(area.replace(",", "."))
+                        except ValueError:
+                            continue
 
-            # print(text)
+                        # Standard molecule
+                        if is_standard:
+                            conc = line_dict.get("Conc")
+                            if conc is None:
+                                # Fallback: use the last column blindly
+                                conc = list(line_dict.values())[-1]
+                            try:
+                                conc = float(conc.replace(",", "."))
+                            except ValueError:
+                                continue
+                            if name in processed["standards"]:
+                                processed["standards"][name][conc] = area
+                            else:
+                                processed["standards"][name] = {conc: area}
+                        # Assume Internal Standard
+                        elif line_dict["Name"].lower().endswith("_is"):
+                            if sample_name in processed["int_standards"]:
+                                processed["int_standards"][sample_name][
+                                    name] = area
+                            else:
+                                processed["int_standards"][sample_name] = {
+                                    name: area}
+                        # Otherwise it is a sample
+                        else:
+                            if sample_name in processed["samples"]:
+                                processed["samples"][sample_name][name] = area
+                            else:
+                                processed["samples"][sample_name] = {name: area}
+
+                            # print(text)
 
             retstr.truncate(0)
             retstr.seek(0)
@@ -152,6 +241,8 @@ def read_pdf(path, report_progress_sgn):
                                      ])
                                      
                 """
+    print(processed)
+    print(sample_types)
     return tot_pages
 
 
