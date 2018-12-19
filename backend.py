@@ -8,7 +8,6 @@ from dict_to_xl import dict_to_xlsx
 class PDFToExcel(QObject):
     front_add_path = pyqtSignal(str)
     front_remove_path = pyqtSignal(str)
-    front_progress = pyqtSignal(int)
 
     def __init__(self, front_obj):
         super().__init__()
@@ -16,7 +15,6 @@ class PDFToExcel(QObject):
         self.front = front_obj
         self.front_add_path.connect(self.front.add_path_to_list)
         self.front_remove_path.connect(self.front.drop_path_from_list)
-        self.front_progress.connect(self.report_progress)
 
     def add_paths_drag_n_drop(self, paths):
         for file in paths.split('\n'):
@@ -36,9 +34,6 @@ class PDFToExcel(QObject):
             if os.path.splitext(path_final)[1] == ".pdf":
                 self.add_paths(path_final)
 
-    def report_progress(self, sgn):
-        print(sgn)
-
     def add_paths(self, path):
         path = os.path.normpath(path)
         if path in self.names_paths.values():
@@ -54,21 +49,21 @@ class PDFToExcel(QObject):
     def export_pdf_to_excel(self, output_path):
         output_path = os.path.normpath(output_path)
         pool = QThreadPool()
-        # pool.setMaxThreadCount(2)
+        # pool.globalInstance().setMaxThreadCount(2)
         for front_name, input_path in self.names_paths.items():
             worker = Worker(dict_to_xlsx, front_name, input_path,
-                            output_path, self.front_progress)
-            worker.signals.progress.connect(self.front.change_color_started)
+                            output_path)
+            worker.signals.progress.connect(self.front.progress_started)
             worker.signals.result.connect(self.front.change_color_finished)
             pool.globalInstance().start(worker)  # .globalInstance() is the key!
-        pool.waitForDone()
 
 
 class WorkerSignals(QObject):
     finished = pyqtSignal()
     error = pyqtSignal(tuple)
     result = pyqtSignal(tuple)
-    progress = pyqtSignal(str)
+    progress = pyqtSignal(tuple)
+    internal_progress = pyqtSignal(float)
 
 
 class Worker(QRunnable):
@@ -79,10 +74,11 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()
+        self.signals.internal_progress.connect(self.report_progress)
+        self.kwargs["sgn_progress"] = self.signals.internal_progress
 
     @pyqtSlot()
     def run(self):
-        self.signals.progress.emit(self.front_name)
         res = self.task(*self.args, **self.kwargs)
         if res == 0:
             self.signals.result.emit((self.front_name, 0))
@@ -92,3 +88,6 @@ class Worker(QRunnable):
             self.signals.result.emit((self.front_name, 2))
         else:
             self.signals.result.emit((self.front_name, 3))
+
+    def report_progress(self, progress):
+        self.signals.progress.emit((self.front_name, progress))

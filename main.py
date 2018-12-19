@@ -1,6 +1,6 @@
-from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QThreadPool
 from PyQt5.QtGui import (QPalette, QStandardItem, QStandardItemModel, QColor,
-                         QIcon)
+                         QIcon, QLinearGradient)
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, \
     QFileDialog, QVBoxLayout, QHBoxLayout, QListView, QLabel
 import backend
@@ -11,6 +11,16 @@ class CustomStandardItem(QStandardItem):
     def __init__(self, path_str):
         super().__init__(path_str)
         self.file_name = path_str
+
+    def set_progress(self, progress: float):
+        gradient = QLinearGradient(0, 0, 330, 0)
+        gradient.setColorAt(0, QColor("#bfb"))
+        clip = min(0.98, max(0.0, progress))
+        gradient.setColorAt(clip, QColor("#bfb"))
+        alpha = QColor(0, 0, 0)
+        alpha.setAlpha(0)
+        gradient.setColorAt(clip + 0.02, alpha)
+        self.setBackground(gradient)
 
 
 class Drop(QWidget):
@@ -26,7 +36,7 @@ class Drop(QWidget):
         bg = self.palette()
         bg.setColor(QPalette.Window, Qt.white)
         self.setPalette(bg)
-        self.setFixedSize(280, 350)
+        self.setFixedSize(340, 450)
         self.setWindowTitle("HPLC a Excel")
         self.setAcceptDrops(True)
 
@@ -69,9 +79,7 @@ class Drop(QWidget):
         v_box.addLayout(lower_h_box)
         v_box.addWidget(self.copyright)
         h_box = QHBoxLayout()
-        h_box.addStretch()
         h_box.addLayout(v_box)
-        h_box.addStretch()
         self.setLayout(h_box)
 
     def dragEnterEvent(self, event):
@@ -136,7 +144,8 @@ class Drop(QWidget):
             item = model.item(pos)
             if item.file_name == file_name:
                 if res == 0:
-                    item.setBackground(QColor(200, 250, 200))
+                    item.setBackground(QColor("#bfb"))
+
                     item.setToolTip(f"Procesado correcto - {file_name}")
                     text = item.file_name
                     text = text[:34] + "..." if len(text) > 37 else text
@@ -171,14 +180,16 @@ class Drop(QWidget):
                 break
             pos += 1
 
-    @pyqtSlot(str)
-    def change_color_started(self, file_name):
+    @pyqtSlot(tuple)
+    def progress_started(self, args):
+        file_name, progress = args
         model = self.list.model()
         pos = 0
         while pos < model.rowCount():
             item = model.item(pos)
-            if item.text() == file_name:
-                item.setBackground(QColor(200, 200, 250))
+            if item.file_name == file_name:
+                # item.setBackground(QColor(200, 200, 250))
+                item.set_progress(progress)
                 item.setToolTip(f"Procesando {file_name}")
                 text = item.file_name
                 text = text[:25] + "..." if len(text) > 28 else text
@@ -186,6 +197,12 @@ class Drop(QWidget):
                 item.setText(text)
                 break
             pos += 1
+
+    def closeEvent(self, event):
+        QThreadPool.globalInstance().waitForDone()
+        print("Bye")
+        event.accept()
+
 
 
 if __name__ == '__main__':

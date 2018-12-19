@@ -20,7 +20,7 @@ STD_SAMPLE_NAME = re.compile(r"(?:Sample Name|Nombre de la muestra):\s*St", F)
 STD_VIAL_TYPE = re.compile(r"(Vial Type|Tipo):\s*std", F)
 
 
-def read_pdf(path, report_progress_sgn):
+def read_pdf(path, report_progress_sgn=None):
     """
     Reads the pdf file given in path and reports progress if a signal is given
 
@@ -69,7 +69,7 @@ def read_pdf(path, report_progress_sgn):
         # Process each page contained in the document.
         for n, page in enumerate(doc.get_pages(), 1):
             if report_progress_sgn:
-                report_progress_sgn.emit(n)
+                report_progress_sgn.emit(n / tot_pages)
             else:
                 pass
                 # print("-" * 20 + "\n", n, '\n')
@@ -79,7 +79,6 @@ def read_pdf(path, report_progress_sgn):
             sample_name = None
 
             if BLANK.search(text):
-                print("BLANCO")
                 retstr.truncate(0)
                 retstr.seek(0)
                 continue
@@ -233,9 +232,9 @@ def read_pdf(path, report_progress_sgn):
                                      ])
                                      
                 """
-    print(processed)
-    print(sample_types)
-    print(molecule_names_set)
+    # print(processed)
+    # print(sample_types)
+    # print(molecule_names_set)
     # return tot_pages
     return processed, sorted(list(molecule_names_set))
 
