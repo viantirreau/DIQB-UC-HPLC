@@ -1,12 +1,9 @@
 from pdfminer.pdfparser import PDFParser, PDFDocument
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter, resolve1
-from pdfminer.converter import PDFPageAggregator, TextConverter
-from pdfminer.layout import LAParams, LTTextBox
+from pdfminer.converter import TextConverter
+from pdfminer.layout import LAParams
 import re
 import io
-from functools import reduce
-import os
-import time
 
 # RegEx compiles
 F = re.MULTILINE | re.IGNORECASE
@@ -68,11 +65,11 @@ def read_pdf(path, report_progress_sgn=None):
         print("Total:", tot_pages)
         # Process each page contained in the document.
         for n, page in enumerate(doc.get_pages(), 1):
+            # Report a float progress between 0 and 1 to the thread.
+            # It then delegates another signal for the GUI and updates this
+            # file's progress bar.
             if report_progress_sgn:
                 report_progress_sgn.emit(n / tot_pages)
-            else:
-                pass
-                # print("-" * 20 + "\n", n, '\n')
             interpreter.process_page(page)
             text = retstr.getvalue()
             is_standard = False
@@ -120,7 +117,7 @@ def read_pdf(path, report_progress_sgn=None):
             # if vert:
             #     if vert[0]:
             #         print(
-            #             vert[0][0][::-1].replace("\n\n", " ").replace("\n", ""))
+            #         vert[0][0][::-1].replace("\n\n", " ").replace("\n", ""))
             data_section = False
             started_saving_data = False
             col_names = None
@@ -147,7 +144,6 @@ def read_pdf(path, report_progress_sgn=None):
                         # with spaces (which are the delimiters)
                         started_saving_data = True
                         col_names_ = col_names[:]
-                        # print(line)
                         positive_name_col_idx = col_names_.index("Name")
                         reverse_name_col_idx = positive_name_col_idx - len(
                             col_names_) + 1
@@ -207,83 +203,8 @@ def read_pdf(path, report_progress_sgn=None):
 
             retstr.truncate(0)
             retstr.seek(0)
-            """
-            layout = device.get_result()
-            for lt_obj in layout:
-                if isinstance(lt_obj, LTTextBox):
-                    for subgroup in lt_obj.get_text().split("\n"):
-                        if EMPTY.match(subgroup) or subgroup.count(
-                                " ") == 0:
-                            continue
-                        detection = r"\d+\s\w*\s( |\d|,)*"
-                        subgroup = re.sub(' +', ' ', subgroup)
-                        if SAMPLE_NAME.match(subgroup):
-                            last_sample = re.search(r"(?<=^Sample Name: ).*",
-                                                    subgroup).group(0)
-                            while last_sample in dict_samples:
-                                last_sample += "B"
-
-                        if DETECTION.match(subgroup):
-                            inner_detection = INNER_DET.search(subgroup)
-                            if inner_detection:
-                                dict_samples[last_sample].append(
-                                    [inner_detection.group(1),
-                                     subgroup.split(" ")[-4]
-                                     ])
-                                     
-                """
     # print(processed)
     # print(sample_types)
     # print(molecule_names_set)
     # return tot_pages
     return processed, sorted(list(molecule_names_set))
-
-
-def all_std_intersection(txt):
-    stds = {k: v for k, v in txt.items() if re.match("^Std\d+", k)}
-    if not stds:
-        raise ValueError
-    return reduce(set.intersection, [{i[0] for i in j} for j in stds.values()])
-
-
-def split_samples_std(txt):
-    """
-    Lee un archivo mediante la función read_pdf y transforma el dict de su
-    output, en formato nombre_muestra: lista_detecciones a 2 dict, uno
-    para las muestras, en el mismo formato, y otro para los standard para la
-    curva de calibrado. El formato del primero es
-    {sample_name: [[molecule1, area1], [molecule2, area2]]}.
-    El formato para el segundo es
-    {concentracion_std: [[molec1, area1], [molec2, area2]]}
-    """
-    stds = {}
-    nombres_stds = set()
-    for nom_muestra in txt:
-        if re.match("^Std\d+", nom_muestra, flags=re.IGNORECASE):
-            nombres_stds.add(nom_muestra)
-            masa_por_litro = re.search(r"(?<=^Std)(\d+)", nom_muestra).group(1)
-            if masa_por_litro.isdigit():
-                stds[masa_por_litro] = txt[nom_muestra]
-    all_std_intersect = all_std_intersection(txt)
-    std_filtrado = {
-        int(k): {j[0]: float(j[1]) for j in v if j[0] in all_std_intersect}
-        for k, v in stds.items()}
-    samples_filtrado = {
-        k: {j[0]: float(j[1]) for j in v if j[0] in all_std_intersect} for
-        k, v in txt.items() if k not in nombres_stds}
-    # Sort nombres
-    samples_filtrado = {k: samples_filtrado[k] for k in
-                        sorted(samples_filtrado)}
-    return samples_filtrado, std_filtrado
-
-
-if __name__ == '__main__':
-    # c = 0
-    # t0 = time.time()
-    # for file in os.listdir(os.getcwd()):
-    #     if file.endswith(".pdf"):
-    #         print(file)
-    #         c += read_pdf(file, None)
-    # t_tot = time.time() - t0
-    # print(f"Procesadas {c} páginas en {t_tot:.4f} s -> {c/t_tot:.4f} p/s")
-    read_pdf("Series Azucares_30.11.18.pdf", None)

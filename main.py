@@ -188,7 +188,6 @@ class Drop(QWidget):
         while pos < model.rowCount():
             item = model.item(pos)
             if item.file_name == file_name:
-                # item.setBackground(QColor(200, 200, 250))
                 item.set_progress(progress)
                 item.setToolTip(f"Procesando {file_name}")
                 text = item.file_name
@@ -202,7 +201,6 @@ class Drop(QWidget):
         QThreadPool.globalInstance().waitForDone()
         print("Bye")
         event.accept()
-
 
 
 if __name__ == '__main__':

@@ -2,7 +2,6 @@ import numpy as np
 import xlsxwriter
 from pdf_to_dict import read_pdf
 import os.path
-import time
 import re
 
 
@@ -31,7 +30,8 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
     :param sgn_progress: pyqtSignal for reporting progress to GUI
     :param report_od: Whether to include OD and biomass-based yield calculations
     :return:    0: File processed and saved successfully
-                1: File lacks standard areas for molecule concentration
+                1: [DEPRECATED] File lacks standard areas for
+                   molecule concentration
                 2: File is locked
                 3: Error in processing
     """
@@ -51,6 +51,8 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
         samples = result["samples"]
         standards = result["standards"]
         int_standards = result["int_standards"]
+        if int_standards:
+            print("IS", int_standards)
         try:
             workbook = xlsxwriter.Workbook(
                 os.path.join(save_path, f'Resultados {filename}.xlsx'))
@@ -85,12 +87,13 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
         red.set_align("vcenter")
 
         for molecule in molecule_names:
+            # Excel worksheets cannot contain []:*?/\ in their names
             sanitized_molecule = re.sub(r"[:\\\[\]*?/]+", "", molecule)
             worksheet = workbook.add_worksheet(sanitized_molecule)
             worksheet.set_column(0, 0, 3)
             worksheet.set_row(0, 9)
 
-            # If there are no standards or less than two points
+            # If there are no standards or less than the two points
             # needed for the fit, do not report concentrations, only areas
             if molecule not in standards or len(
                     standards.get(molecule, {}).keys()) < 2:
@@ -124,7 +127,7 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
                 worksheet.write(linear_fit_row - 1, 1, "m", center_)
                 worksheet.write(linear_fit_row - 1, 2, "n", center_)
 
-                # Filter only greater than 0 areas
+                # Filter only positive areas
                 sample_areas = filter(lambda x: x > 0,
                                       [samples[spl_name][molecule] for spl_name
                                        in samples if molecule in
@@ -135,7 +138,6 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
                 scatter.set_title(
                     {"name": f"Curva de calibrado {molecule}"})
 
-                neg_conc = False
                 # Check for non-negative concentrations
                 x_vals, y_vals = increasing, [standards[molecule][i] for i
                                               in
@@ -149,12 +151,11 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
                               "Parameters ",
                               f"m:{with_intercept[0]}, n:{with_intercept[1]}")
 
-                except np.linalg.linalg.LinAlgError as err:
+                except np.linalg.linalg.LinAlgError:
                     neg_conc = True
                     print(x_vals, y_vals)
 
                 if neg_conc:
-
                     worksheet.write_array_formula(
                         linear_fit_row, 1, linear_fit_row, 2,
                         f"=LINEST(C5:C{r+1}, B5:B{r+1}, false, false)",
@@ -172,6 +173,7 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
                         },
                     })
                 else:
+                    # No sample has negative estimated area
                     worksheet.write_rich_string(linear_fit_row - 1, 3, "R", exp,
                                                 "2", center_)
                     worksheet.write_array_formula(
@@ -227,105 +229,9 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
                         worksheet.write_formula(
                             row, 7, f"=D{row+1}/(G{row+1}*1000)", center_)
 
-                    """
-                    for sample_name in samples:
-                        # Ver si no hay concentraciones negativas
-                        
-                        sample_vals = [sampl[sample_name] for sampl in samples.values() if
-                                       sample_name in sampl]
-                        
-                        pos_m = (r + 3, 0)
-                        pos_n = (r + 3, 1)
-                        scatter = workbook.add_chart(
-                            {"type": "scatter"})
-                        scatter.set_title(
-                            {"name": f"Curva de calibrado {sample_name}"})
-                        if any_negative_concentration(with_intercept, sample_vals):
-                            worksheet.write_array_formula(
-                                r + 3, 0, r + 3, 1,
-                                f"=LINEST(B3:B{r+1}, A3:A{r+1}, false, false)"
-                            )
-            
-                            scatter.add_series({
-                                'categories': f"'{sample_name}'!$A$3:$A${r+1}",
-                                'values': f"'{sample_name}'!$B$3:$B${r+1}",
-                                'trendline': {
-                                    'type': 'linear',
-                                    'intercept': 0,
-                                    'display_equation': True,
-                                    'display_r_squared': True
-                                },
-                            })
-                        else:
-                            worksheet.write_rich_string(r + 2, 2, "R", exp, "2", center)
-                            worksheet.write_array_formula(
-                                r + 3, 0, r + 3, 1,
-                                f"=LINEST(B3:B{r+1}, A3:A{r+1}, true, false)")
-            
-                            worksheet.write_formula(r + 3, 2,
-                                                    f"=(PEARSON(B3:B{r+1}, A3:A{r+1}))^2")
-                            scatter.add_series({
-                                'categories': f"'{sample_name}'!$A$3:$A${r+1}",
-                                'values': f"'{sample_name}'!$B$3:$B${r+1}",
-                                'trendline': {
-                                    'type': 'linear',
-                                    'display_equation': True,
-                                    'display_r_squared': True
-                                },
-                            })
-            
-                        scatter.set_legend({'position': 'none'})
-            
-                        scatter.set_x_axis({'name': 'Conc. mg/L'})
-                        scatter.set_y_axis({'name': 'Área'})
-                        worksheet.insert_chart("E1", scatter)
-            
-                        # Escribir muestras
-                        worksheet.write(r + 10, 0, "Muestra", center)
-                        worksheet.write(r + 10, 1, "Área", center)
-                        worksheet.write(r + 10, 2, "mg/L", center)
-                        worksheet.write(r + 10, 3, "OD", center)
-                        worksheet.write(r + 10, 4, "mL vial", center)
-                        worksheet.write(r + 10, 5, "g Biomasa", center)
-                        worksheet.write(r + 10, 6, "mg/g", center)
-            
-                        for row, nombre in enumerate(samples, r + 11):
-                            worksheet.write(row, 0, nombre)
-                            worksheet.write(row, 1, samples[nombre].get(sample_name, 0))
-                            worksheet.write_formula(
-                                row, 2,
-                                f"=(B{row+1}-B{pos_n[0]+1})/A{pos_m[0]+1}",
-                                cell_format=decimals3)
-                            worksheet.write_number(row, 3, 20, light_blue)
-                            worksheet.write_number(row, 4, 1, light_blue)
-                            worksheet.write_formula(
-                                row, 5, f"=0.4*D{row+1}*E{row+1}/1000"
-                            )
-                            worksheet.write_formula(
-                                row, 6, f"=C{row+1}/(F{row+1}*1000)"
-                            )
-                            """
         try:
             workbook.close()
         except PermissionError:
             return 2
         return 0
     return 3
-
-
-if __name__ == '__main__':
-    c = 0
-    t0 = time.time()
-    for file in os.listdir(os.getcwd()):
-        if file.endswith(".pdf"):
-            print(file)
-            if "carot" in file.lower():
-                dict_to_xlsx(
-                    file, "C:/Users/Victor/Desktop/res/", None, True)
-            else:
-                dict_to_xlsx(
-                    file, "C:/Users/Victor/Desktop/res/",
-                    None)
-            c += 1
-    t_tot = time.time() - t0
-    print(f"Procesados {c} archivos en {t_tot:.4f} s")
