@@ -1,8 +1,8 @@
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QThreadPool
 from PyQt5.QtGui import (QPalette, QStandardItem, QStandardItemModel, QColor,
-                         QIcon, QLinearGradient)
+                         QIcon, QLinearGradient, QKeySequence)
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, \
-    QFileDialog, QVBoxLayout, QHBoxLayout, QListView, QLabel
+    QFileDialog, QVBoxLayout, QHBoxLayout, QListView, QLabel, QDialog, QCheckBox
 import backend
 import sys
 
@@ -27,7 +27,7 @@ class Drop(QWidget):
     add_path_signal = pyqtSignal(str)
     add_drag_n_drop_path_signal = pyqtSignal(str)
     remove_path_signal = pyqtSignal(str)
-    export_all_signal = pyqtSignal(str)
+    export_all_signal = pyqtSignal(tuple)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -44,6 +44,11 @@ class Drop(QWidget):
         self.btn_load_files = QPushButton("Cargar archivos", self)
         self.btn_export = QPushButton("Exportar todos a Excel", self)
         self.btn_remove_checked = QPushButton("Descartar seleccionados", self)
+        self.btn_config = QPushButton("", self)
+        self.btn_config.setIcon(QIcon("ui/gear.png"))
+        self.btn_config.setMaximumWidth(30)
+        self.btn_config.setToolTip("Configuración (Ctrl + K)")
+        self.btn_config.setShortcut(Qt.CTRL + Qt.Key_K)
 
         # Label creation
         self.copyright = QLabel("DIQB UC - Víctor Tirreau - 2018", self)
@@ -54,6 +59,7 @@ class Drop(QWidget):
         self.btn_load_files.clicked.connect(self.get_files)
         self.btn_remove_checked.clicked.connect(self.remove_checked)
         self.btn_export.clicked.connect(self.open_export_dialog)
+        self.btn_config.clicked.connect(self.open_config_dialog)
 
         # Signal connection
         self.back = backend.PDFToExcel(self)
@@ -69,18 +75,24 @@ class Drop(QWidget):
         self.list.setModel(self.model)
 
         # Layout
+        top_h_box = QHBoxLayout()
+        top_h_box.addWidget(self.btn_load_files)
+        top_h_box.addWidget(self.btn_config)
         lower_h_box = QHBoxLayout()
         lower_h_box.addWidget(self.btn_remove_checked)
         lower_h_box.addStretch(10)
         lower_h_box.addWidget(self.btn_export)
         v_box = QVBoxLayout()
-        v_box.addWidget(self.btn_load_files)
+        v_box.addLayout(top_h_box)
         v_box.addWidget(self.list)
         v_box.addLayout(lower_h_box)
         v_box.addWidget(self.copyright)
         h_box = QHBoxLayout()
         h_box.addLayout(v_box)
         self.setLayout(h_box)
+
+        # Config
+        self.include_od = False
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasText():
@@ -133,7 +145,37 @@ class Drop(QWidget):
         path = QFileDialog.getExistingDirectory(self,
                                                 "Elegir carpeta para guardar "
                                                 "Excel's")
-        self.export_all_signal.emit(path)
+        self.export_all_signal.emit((path,self.include_od))
+
+    def open_config_dialog(self):
+        dialog = QDialog(None, Qt.WindowCloseButtonHint)
+        dialog.setWindowTitle("Configuración")
+        dialog.setModal(True)
+        check = QCheckBox("Agregar columnas de rendimiento (OD y mg/g)", dialog)
+        check.setChecked(self.include_od)
+        v_box = QVBoxLayout()
+        v_box.addWidget(check)
+        cancel = QPushButton("Cancelar", dialog)
+        cancel.setShortcut(QKeySequence(Qt.Key_Escape))
+        accept = QPushButton("Aceptar", dialog)
+        accept.setShortcut(QKeySequence(Qt.Key_Enter))
+        accept.setFocusPolicy(Qt.TabFocus)
+        accept.setDefault(True)
+        h_box = QHBoxLayout()
+        h_box.addWidget(cancel)
+        h_box.addWidget(accept)
+        v_box.addStretch(1)
+        v_box.addLayout(h_box)
+        dialog.setFixedSize(300, 100)
+        dialog.setLayout(v_box)
+        cancel.clicked.connect(dialog.reject)
+        accept.clicked.connect(dialog.accept)
+        dialog.accepted.connect(lambda: apply_changes(check.checkState()))
+
+        def apply_changes(state):
+            self.include_od = state
+
+        dialog.exec_()
 
     @pyqtSlot(tuple)
     def change_color_finished(self, args):

@@ -46,13 +46,14 @@ class PDFToExcel(QObject):
         self.names_paths.pop(path, None)
         self.front_remove_path.emit(path)
 
-    def export_pdf_to_excel(self, output_path):
+    def export_pdf_to_excel(self, args):
+        output_path, include_od = args
         output_path = os.path.normpath(output_path)
         pool = QThreadPool()
         # pool.globalInstance().setMaxThreadCount(2)
         for front_name, input_path in self.names_paths.items():
             worker = Worker(dict_to_xlsx, front_name, input_path,
-                            output_path)
+                            output_path, report_od=include_od)
             worker.signals.progress.connect(self.front.progress_started)
             worker.signals.result.connect(self.front.change_color_finished)
             pool.globalInstance().start(worker)  # .globalInstance() is the key!
