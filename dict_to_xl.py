@@ -51,8 +51,6 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
         samples = result["samples"]
         standards = result["standards"]
         int_standards = result["int_standards"]
-        if int_standards:
-            print("IS", int_standards)
         try:
             workbook = xlsxwriter.Workbook(
                 os.path.join(save_path, f'Resultados {filename}.xlsx'))
@@ -140,8 +138,7 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
 
                 # Check for non-negative concentrations
                 x_vals, y_vals = increasing, [standards[molecule][i] for i
-                                              in
-                                              increasing]
+                                              in increasing]
                 try:
                     with_intercept = linear_fit(x_vals, y_vals)
                     neg_conc = any_negative_concentration(with_intercept,
@@ -159,8 +156,7 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
                     worksheet.write_array_formula(
                         linear_fit_row, 1, linear_fit_row, 2,
                         f"=LINEST(C5:C{r+1}, B5:B{r+1}, false, false)",
-                        cell_format=center_
-                    )
+                        cell_format=center_)
 
                     scatter.add_series({
                         'categories': f"'{molecule}'!$B$5:$B${r+1}",
@@ -228,6 +224,39 @@ def dict_to_xlsx(arch, save_path, sgn_progress=None, report_od=False):
                             row, 6, f"=0.4*E{row+1}*F{row+1}/1000", center_)
                         worksheet.write_formula(
                             row, 7, f"=D{row+1}/(G{row+1}*1000)", center_)
+
+        if int_standards:
+            worksheet = workbook.add_worksheet("Estándar Interno")
+            worksheet.set_column(0, 0, 3)
+            worksheet.set_row(0, 9)
+
+            todas = {i_std_name for mol in int_standards.values() for i_std_name
+                     in mol.keys()}
+            todas_sort = sorted(list(todas))
+            # Adapt column to longer names
+            worksheet.set_column(2, 1 + len(todas_sort), 12)
+            worksheet.write("B2", "Muestra", center_)
+            for col, i_std_name in enumerate(todas_sort, 2):
+                worksheet.write(1, col, i_std_name, center_)
+                excel_column = chr(65 + col)
+                for row, sample_name in enumerate(int_standards.keys(), 2):
+                    worksheet.write(row, 1, sample_name, center_)
+                    worksheet.write_number(row, col,
+                                           int_standards[sample_name].get(
+                                               i_std_name, 0), center_)
+                scatter = workbook.add_chart(
+                    {"type": "scatter"})
+                scatter.set_title(
+                    {"name": f"Estándar Interno {i_std_name}"})
+                scatter.add_series({
+                    'categories': f"'Estándar Interno'!$B$3:$B${row+1}",
+                    'values': f"'Estándar Interno'!${excel_column}$3"
+                              f":${excel_column}${row+1}",
+                    'marker': {'type': 'circle'}})
+                scatter.set_x_axis({'name': 'Muestra'})
+                scatter.set_y_axis({'name': 'Área'})
+                scatter.set_legend({"none": True})
+                worksheet.insert_chart(f"J{2+10*(col-2)}", scatter)
 
         try:
             workbook.close()

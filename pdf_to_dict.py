@@ -62,7 +62,6 @@ def read_pdf(path, report_progress_sgn=None):
                      "int_standards": {}}
 
         tot_pages = resolve1(doc.catalog["Pages"])["Count"]
-        print("Total:", tot_pages)
         # Process each page contained in the document.
         for n, page in enumerate(doc.get_pages(), 1):
             # Report a float progress between 0 and 1 to the thread.
