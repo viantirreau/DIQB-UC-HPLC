@@ -114,3 +114,6 @@ venv.bak/
 *.lnk
 *.bat
 *.ctx
+
+Build scripts
+setup.py
